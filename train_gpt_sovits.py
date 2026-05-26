@@ -88,7 +88,7 @@ if not os.path.exists('GPT-SoVITS'):
         'https://github.com/RVC-Boss/GPT-SoVITS.git'], check=True)
     print("  ✅ Cloned")
 else:
-    print("  ✅ Already exists")
+    print("  ✅ Already exists (skipping clone)")
 
 # ============================================================
 # Step 3: Install dependencies
