@@ -107,46 +107,35 @@ print(f"  CUDA: {torch.cuda.is_available()}")
 # ============================================================
 print("\n📥 STEP 4/6: Download pretrained models")
 
-# Read HF_TOKEN from Kaggle Secrets (secure) or env variable
-hf_token = os.environ.get('HF_TOKEN', '') or os.environ.get('HUGGING_FACE_HUB_TOKEN', '')
-if not hf_token:
-    try:
-        from kaggle_secrets import UserSecretsClient
-        user_secrets = UserSecretsClient()
-        hf_token = user_secrets.get_secret("HF_TOKEN")
-        os.environ['HF_TOKEN'] = hf_token
-        os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
-        print("  ✅ Loaded HF_TOKEN from Kaggle Secrets")
-    except Exception as e:
-        print(f"  ⚠️  No HF_TOKEN found (Kaggle Secrets or env var)")
-        print(f"     Add HF_TOKEN in Kaggle: Settings → Secrets → Add")
-else:
-    os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
-    print("  ✅ Loaded HF_TOKEN from environment")
+# Use GPT-SoVITS official download script (reliable)
+os.chdir('/kaggle/working/GPT-SoVITS')
 
-# Use Python API directly (more reliable than CLI)
-print("  Downloading via huggingface_hub Python API...")
+print("  Running official download_models.py...")
+subprocess.run([
+    sys.executable, 'download_models.py',
+    '--model_root', '/kaggle/working/GPT-SoVITS/pretrained_models'
+], check=True, capture_output=False)
 
-from huggingface_hub import hf_hub_download, HfApi
+# Verify downloads
+gpt_path = '/kaggle/working/GPT-SoVITS/pretrained_models/gpt.ckpt'
+sovits_path = '/kaggle/working/GPT-SoVITS/pretrained_models/sovits.pth'
 
-# Download GPT model
-gpt_path = hf_hub_download(
-    repo_id='RVC-Boss/GPT-SoVITS',
-    filename='pretrained_models/gpt.ckpt',
-    local_dir='/kaggle/working/GPT-SoVITS',
-    token=hf_token if hf_token else None,
-    local_dir_use_symlinks=False
-)
+if not os.path.exists(gpt_path):
+    print(f"  ⚠️  GPT model not found at {gpt_path}")
+    print(f"     Trying alternative paths...")
+    # Try to find actual file names
+    for root, dirs, files in os.walk('/kaggle/working/GPT-SoVITS/pretrained_models'):
+        for f in files:
+            if f.endswith('.ckpt') and 'gpt' in f.lower():
+                gpt_path = os.path.join(root, f)
+                print(f"  ✅ Found GPT model: {gpt_path}")
+                break
+            if f.endswith('.pth') and 'sovit' in f.lower():
+                sovits_path = os.path.join(root, f)
+                print(f"  ✅ Found SoVITS model: {sovits_path}")
+                break
+
 print(f"  ✅ GPT model: {gpt_path}")
-
-# Download SoVITS model
-sovits_path = hf_hub_download(
-    repo_id='RVC-Boss/GPT-SoVITS',
-    filename='pretrained_models/sovits.pth',
-    local_dir='/kaggle/working/GPT-SoVITS',
-    token=hf_token if hf_token else None,
-    local_dir_use_symlinks=False
-)
 print(f"  ✅ SoVITS model: {sovits_path}")
 
 # ============================================================
