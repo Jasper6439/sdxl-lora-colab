@@ -190,8 +190,9 @@ print("="*60)
 print("STEP 4: Loading Dataset")
 print("="*60)
 
-# === FIXED: Use correct dataset path from your screenshot ===
-DATA_DIR = "/kaggle/input/cha_juwan_wavs"
+# === Kaggle dataset path ===
+# Format: /kaggle/input/datasets/{owner}/{repo}/{dataset}
+DATA_DIR = "/kaggle/input/datasets/ulysses6406/chajoowan-wavs"
 
 print(f"Dataset path: {DATA_DIR}")
 
@@ -273,7 +274,8 @@ class TrainingConfig:
     gpt_model_path: str = os.path.join(MODEL_DIR, "chinese-speech-pretrain")
     
     # Data paths (Kaggle dataset)
-    data_dir: str = "/kaggle/input/cha_juwan_wavs"
+    # Format: /kaggle/input/datasets/{owner}/{repo}/{dataset}
+    data_dir: str = "/kaggle/input/datasets/ulysses6406/chajoowan-wavs"
     ref_audio_files: List[str] = None
     train_audio_files: List[str] = None
     
