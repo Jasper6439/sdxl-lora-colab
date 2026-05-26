@@ -99,69 +99,135 @@ print("  ✅ Cloned")
 # ============================================================
 print("\n📚 STEP 3/6: Install dependencies")
 os.chdir('/kaggle/working/GPT-SoVITS')
+
+# Fix: Remove opencc from requirements.txt (fails to build on Kaggle)
+requirements_file = 'requirements.txt'
+if os.path.exists(requirements_file):
+    with open(requirements_file, 'r') as f:
+        lines = f.readlines()
+    # Filter out opencc
+    filtered_lines = [line for line in lines if 'opencc' not in line.lower()]
+    with open(requirements_file, 'w') as f:
+        f.writelines(filtered_lines)
+    print("  ✅ Removed opencc from requirements.txt (replaced with opencc-python-reimplemented)")
+
+# Install requirements (opencc skipped)
 subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-input',
-    '-r', 'requirements.txt'],
+    '-r', requirements_file],
+    capture_output=False)
+
+# Install opencc replacement
+print("  Installing opencc replacement...")
+subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-input',
+    'opencc-python-reimplemented'],
     capture_output=False)
 
 print(f"  torch: {torch.__version__}")
 print(f"  CUDA: {torch.cuda.is_available()}")
 
 # ============================================================
-# Step 4: Download pretrained models
+# Step 4: Download pretrained models (独立下载，不依赖外部脚本)
 # ============================================================
 print("\n📥 STEP 4/6: Download pretrained models")
 
 os.chdir('/kaggle/working/GPT-SoVITS')
+os.makedirs('pretrained_models', exist_ok=True)
 
-# Method 1: Try official download_models.py
-download_script = 'download_models.py'
-if os.path.exists(download_script):
-    print("  Trying official download_models.py...")
-    result = subprocess.run([
-        sys.executable, download_script,
-        '--model_root', '/kaggle/working/GPT-SoVITS/pretrained_models'
-    ], capture_output=True, text=True)
-    
-    if result.returncode == 0:
-        print("  ✅ download_models.py succeeded")
-    else:
-        print(f"  ⚠️  download_models.py failed (exit {result.returncode})")
-        print(f"     stderr: {result.stderr[-200:] if result.stderr else 'N/A'}")
+# 设置 HF_TOKEN
+hf_token = os.environ.get('HF_TOKEN', '') or os.environ.get('HUGGING_FACE_HUB_TOKEN', '')
+if not hf_token:
+    try:
+        from kaggle_secrets import UserSecretsClient
+        hf_token = UserSecretsClient().get_secret("HF_TOKEN")
+        os.environ['HF_TOKEN'] = hf_token
+        os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
+        print("  ✅ Loaded HF_TOKEN from Kaggle Secrets")
+    except Exception as e:
+        print(f"  ⚠️  No HF_TOKEN found (Kaggle Secrets or env var)")
+        print(f"     Add HF_TOKEN in Kaggle: Settings → Secrets → Add")
 else:
-    print(f"  ⚠️  {download_script} not found, using manual download")
+    os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
+    print("  ✅ Loaded HF_TOKEN from environment")
 
-# Method 2: Manual download (fallback)
-print("\n  Attempting manual download...")
+# 安装 huggingface_hub
+print("  Installing huggingface_hub...")
+subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-input', 'huggingface_hub'], 
+    capture_output=False)
+
+# 使用 Python API 直接下载（最可靠）
+print("  Downloading via huggingface_hub Python API...")
+from huggingface_hub import hf_hub_download
+
+try:
+    # 下载 GPT 模型
+    gpt_path = hf_hub_download(
+        repo_id='RVC-Boss/GPT-SoVITS',
+        filename='pretrained_models/gpt.ckpt',
+        local_dir='/kaggle/working/GPT-SoVITS',
+        token=hf_token if hf_token else None,
+        local_dir_use_symlinks=False
+    )
+    print(f"  ✅ GPT model: {gpt_path}")
+except Exception as e:
+    print(f"  ⚠️  GPT model download failed: {e}")
+    gpt_path = None
+
+try:
+    # 下载 SoVITS 模型
+    sovits_path = hf_hub_download(
+        repo_id='RVC-Boss/GPT-SoVITS',
+        filename='pretrained_models/sovits.pth',
+        local_dir='/kaggle/working/GPT-SoVITS',
+        token=hf_token if hf_token else None,
+        local_dir_use_symlinks=False
+    )
+    print(f"  ✅ SoVITS model: {sovits_path}")
+except Exception as e:
+    print(f"  ⚠️  SoVITS model download failed: {e}")
+    sovits_path = None
+
+# 如果上面失败，尝试备用方案
+if not gpt_path or not os.path.exists(gpt_path):
+    print("\n  Trying alternative download method...")
+    # 尝试从 GitHub releases 或其他镜像源下载
+    # 这里提供手动下载说明
+    print(f"\n  ⚠️  Automatic download failed.")
+    print(f"     Please download manually:")
+    print(f"     1. GPT model: https://huggingface.co/RVC-Boss/GPT-SoVITS/resolve/main/pretrained_models/gpt.ckpt")
+    print(f"     2. SoVITS model: https://huggingface.co/RVC-Boss/GPT-SoVITS/resolve/main/pretrained_models/sovits.pth")
+    print(f"     Then upload to /kaggle/working/GPT-SoVITS/pretrained_models/")
+    
+    # 尝试用 wget 下载（可能失败，但试试）
+    print(f"\n  Attempting wget download...")
+    os.makedirs('/kaggle/working/GPT-SoVITS/pretrained_models', exist_ok=True)
+    
+    if not os.path.exists('/kaggle/working/GPT-SoVITS/pretrained_models/gpt.ckpt'):
+        subprocess.run([
+            'wget', '-q', '--no-check-certificate',
+            'https://huggingface.co/RVC-Boss/GPT-SoVITS/resolve/main/pretrained_models/gpt.ckpt',
+            '-O', '/kaggle/working/GPT-SoVITS/pretrained_models/gpt.ckpt'
+        ], capture_output=True)
+        
+    if not os.path.exists('/kaggle/working/GPT-SoVITS/pretrained_models/sovits.pth'):
+        subprocess.run([
+            'wget', '-q', '--no-check-certificate',
+            'https://huggingface.co/RVC-Boss/GPT-SoVITS/resolve/main/pretrained_models/sovits.pth',
+            '-O', '/kaggle/working/GPT-SoVITS/pretrained_models/sovits.pth'
+        ], capture_output=True)
+
+# 验证下载
 gpt_path = '/kaggle/working/GPT-SoVITS/pretrained_models/gpt.ckpt'
 sovits_path = '/kaggle/working/GPT-SoVITS/pretrained_models/sovits.pth'
 
-os.makedirs('/kaggle/working/GPT-SoVITS/pretrained_models', exist_ok=True)
-
-# Try wget from HuggingFace
-if not os.path.exists(gpt_path):
-    print("  Downloading GPT model...")
-    subprocess.run([
-        'wget', '-q', '--no-check-certificate',
-        'https://huggingface.co/RVC-Boss/GPT-SoVITS/resolve/main/pretrained_models/gpt.ckpt',
-        '-O', gpt_path
-    ], capture_output=False)
-    
-if not os.path.exists(sovits_path):
-    print("  Downloading SoVITS model...")
-    subprocess.run([
-        'wget', '-q', '--no-check-certificate',
-        'https://huggingface.co/RVC-Boss/GPT-SoVITS/resolve/main/pretrained_models/sovits.pth',
-        '-O', sovits_path
-    ], capture_output=False)
-
-# Verify downloads
 if os.path.exists(gpt_path):
-    print(f"  ✅ GPT model: {gpt_path}")
+    size_mb = os.path.getsize(gpt_path) / 1024 / 1024
+    print(f"  ✅ GPT model: {gpt_path} ({size_mb:.1f} MB)")
 else:
     print(f"  ❌ GPT model not found at {gpt_path}")
     
 if os.path.exists(sovits_path):
-    print(f"  ✅ SoVITS model: {sovits_path}")
+    size_mb = os.path.getsize(sovits_path) / 1024 / 1024
+    print(f"  ✅ SoVITS model: {sovits_path} ({size_mb:.1f} MB)")
 else:
     print(f"  ❌ SoVITS model not found at {sovits_path}")
 
