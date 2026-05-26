@@ -111,36 +111,59 @@ print(f"  CUDA: {torch.cuda.is_available()}")
 # ============================================================
 print("\n📥 STEP 4/6: Download pretrained models")
 
-# Use GPT-SoVITS official download script (reliable)
 os.chdir('/kaggle/working/GPT-SoVITS')
 
-print("  Running official download_models.py...")
-subprocess.run([
-    sys.executable, 'download_models.py',
-    '--model_root', '/kaggle/working/GPT-SoVITS/pretrained_models'
-], check=True, capture_output=False)
+# Method 1: Try official download_models.py
+download_script = 'download_models.py'
+if os.path.exists(download_script):
+    print("  Trying official download_models.py...")
+    result = subprocess.run([
+        sys.executable, download_script,
+        '--model_root', '/kaggle/working/GPT-SoVITS/pretrained_models'
+    ], capture_output=True, text=True)
+    
+    if result.returncode == 0:
+        print("  ✅ download_models.py succeeded")
+    else:
+        print(f"  ⚠️  download_models.py failed (exit {result.returncode})")
+        print(f"     stderr: {result.stderr[-200:] if result.stderr else 'N/A'}")
+else:
+    print(f"  ⚠️  {download_script} not found, using manual download")
 
-# Verify downloads
+# Method 2: Manual download (fallback)
+print("\n  Attempting manual download...")
 gpt_path = '/kaggle/working/GPT-SoVITS/pretrained_models/gpt.ckpt'
 sovits_path = '/kaggle/working/GPT-SoVITS/pretrained_models/sovits.pth'
 
-if not os.path.exists(gpt_path):
-    print(f"  ⚠️  GPT model not found at {gpt_path}")
-    print(f"     Trying alternative paths...")
-    # Try to find actual file names
-    for root, dirs, files in os.walk('/kaggle/working/GPT-SoVITS/pretrained_models'):
-        for f in files:
-            if f.endswith('.ckpt') and 'gpt' in f.lower():
-                gpt_path = os.path.join(root, f)
-                print(f"  ✅ Found GPT model: {gpt_path}")
-                break
-            if f.endswith('.pth') and 'sovit' in f.lower():
-                sovits_path = os.path.join(root, f)
-                print(f"  ✅ Found SoVITS model: {sovits_path}")
-                break
+os.makedirs('/kaggle/working/GPT-SoVITS/pretrained_models', exist_ok=True)
 
-print(f"  ✅ GPT model: {gpt_path}")
-print(f"  ✅ SoVITS model: {sovits_path}")
+# Try wget from HuggingFace
+if not os.path.exists(gpt_path):
+    print("  Downloading GPT model...")
+    subprocess.run([
+        'wget', '-q', '--no-check-certificate',
+        'https://huggingface.co/RVC-Boss/GPT-SoVITS/resolve/main/pretrained_models/gpt.ckpt',
+        '-O', gpt_path
+    ], capture_output=False)
+    
+if not os.path.exists(sovits_path):
+    print("  Downloading SoVITS model...")
+    subprocess.run([
+        'wget', '-q', '--no-check-certificate',
+        'https://huggingface.co/RVC-Boss/GPT-SoVITS/resolve/main/pretrained_models/sovits.pth',
+        '-O', sovits_path
+    ], capture_output=False)
+
+# Verify downloads
+if os.path.exists(gpt_path):
+    print(f"  ✅ GPT model: {gpt_path}")
+else:
+    print(f"  ❌ GPT model not found at {gpt_path}")
+    
+if os.path.exists(sovits_path):
+    print(f"  ✅ SoVITS model: {sovits_path}")
+else:
+    print(f"  ❌ SoVITS model not found at {sovits_path}")
 
 # ============================================================
 # Step 5: Prepare dataset
