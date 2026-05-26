@@ -83,12 +83,16 @@ print(f"  ✅ Test tensor on: {test_tensor.device}")
 # ============================================================
 print("\n📦 STEP 2/6: Clone GPT-SoVITS")
 os.chdir('/kaggle/working')
-if not os.path.exists('GPT-SoVITS'):
-    subprocess.run(['git', 'clone', '--depth=1',
-        'https://github.com/RVC-Boss/GPT-SoVITS.git'], check=True)
-    print("  ✅ Cloned")
-else:
-    print("  ✅ Already exists (skipping clone)")
+
+# Force clean clone (remove existing directory)
+if os.path.exists('GPT-SoVITS'):
+    print("  Removing existing directory (clean clone)...")
+    shutil.rmtree('GPT-SoVITS')
+
+subprocess.run(['git', 'clone', '--depth=1',
+    'https://github.com/RVC-Boss/GPT-SoVITS.git'], check=True)
+print("  ✅ Cloned")
+
 
 # ============================================================
 # Step 3: Install dependencies
