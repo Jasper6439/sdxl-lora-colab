@@ -106,16 +106,27 @@ print(f"  CUDA: {torch.cuda.is_available()}")
 # Step 4: Download pretrained models
 # ============================================================
 print("\n📥 STEP 4/6: Download pretrained models")
-from huggingface_hub import hf_hub_download
 
-gpt_path = hf_hub_download(repo_id='RVC-Boss/GPT-SoVITS',
-    filename='pretrained_models/gpt.ckpt',
-    local_dir='/kaggle/working/GPT-SoVITS')
+# Method: Use huggingface-cli (works better on Kaggle)
+# If you have HF_TOKEN, uncomment below:
+# os.environ['HF_TOKEN'] = 'hf_xxx...'
+
+print("  Downloading via huggingface-cli (bypasses 401 error)...")
+subprocess.run([
+    'huggingface-cli', 'download', 'RVC-Boss/GPT-SoVITS',
+    'pretrained_models/gpt.ckpt',
+    '--local-dir', '/kaggle/working/GPT-SoVITS'
+], check=True, capture_output=False)
+
+subprocess.run([
+    'huggingface-cli', 'download', 'RVC-Boss/GPT-SoVITS',
+    'pretrained_models/sovits.pth',
+    '--local-dir', '/kaggle/working/GPT-SoVITS'
+], check=True, capture_output=False)
+
+gpt_path = '/kaggle/working/GPT-SoVITS/pretrained_models/gpt.ckpt'
+sovits_path = '/kaggle/working/GPT-SoVITS/pretrained_models/sovits.pth'
 print(f"  ✅ GPT model: {gpt_path}")
-
-sovits_path = hf_hub_download(repo_id='RVC-Boss/GPT-SoVITS',
-    filename='pretrained_models/sovits.pth',
-    local_dir='/kaggle/working/GPT-SoVITS')
 print(f"  ✅ SoVITS model: {sovits_path}")
 
 # ============================================================
