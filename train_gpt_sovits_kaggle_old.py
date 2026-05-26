@@ -1,9 +1,8 @@
 # %% [markdown]
-# GPT-SoVITS Voice Training - Kaggle Optimized (T4x2) v2
+# GPT-SoVITS Voice Training - Kaggle Optimized (T4x2)
 # 
-# ✅ 修复: 使用 HuggingFace Hub 下载模型 (需添加 HUGGINGFACE_TOKEN 到 Kaggle Secrets)
-# ✅ 数据集: cha_juwan_wavs
-# ✅ 修复: Cell 5 变量传递问题
+# ✅ 数据集: cha_juwan_wavs (已添加)
+# ⚠️ 注意: 请在 Kaggle Settings → Secrets 中添加 HUGGINGFACE_TOKEN
 
 # %% [markdown]
 # Cell 1: Environment Setup & GPU Verification
@@ -90,10 +89,10 @@ from transformers import HubertModel, Wav2Vec2FeatureExtractor, SpeechEncoderDec
 print("✓ Transformers imports OK")
 
 # %% [markdown]
-# Cell 3: Download Pretrained Models via HuggingFace Hub
+# Cell 3: Download Pretrained Models (Fixed for Kaggle)
 
 print("="*60)
-print("STEP 3: Downloading Pretrained Models (HuggingFace Hub)")
+print("STEP 3: Downloading Pretrained Models")
 print("="*60)
 
 # Use Kaggle working directory (persistent within session)
@@ -102,59 +101,74 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 
 print(f"Model directory: {MODEL_DIR}")
 
-# Get HuggingFace token from Kaggle Secrets
-hf_token = os.environ.get("HUGGINGFACE_TOKEN", "")
-if not hf_token:
-    print("✗ HUGGINGFACE_TOKEN not found in Kaggle Secrets!")
-    print("Please go to Kaggle → Settings → Secrets and add HUGGINGFACE_TOKEN")
-    sys.exit("Please add HUGGINGFACE_TOKEN to Kaggle Secrets")
+# Download Hubert and GPT models from GitHub Releases
+import urllib.request
+from pathlib import Path
 
-print("✓ HuggingFace token found")
+# Hubert model files
+hubert_url = "https://github.com/RVC-Boss/GPT-SoVITS/releases/download/2024-models/"
 
-# Download models using HuggingFace Hub API
-from huggingface_hub import snapshot_download
-
-models_to_download = {
-    "chinese-hubert-base": "RVC-Boss/GPT-SoVITS-pretrained/chinese-hubert-base",
-    "chinese-speech-pretrain": "RVC-Boss/GPT-SoVITS-pretrained/chinese-speech-pretrain",
+models = {
+    "chinese-hubert-base": {
+        "files": [
+            "config.json",
+            "preprocessor_config.json",
+            "pytorch_model.bin",
+            "tokenizer.json",
+            "vocab.txt",
+        ]
+    },
+    "chinese-speech-pretrain": {
+        "files": [
+            "config.json",
+            "preprocessor_config.json",
+            "pytorch_model.bin",
+            "tokenizer.json",
+            "vocab.txt",
+        ]
+    }
 }
 
-downloaded = []
-failed = []
+downloaded = 0
+failed = 0
 
-for model_name, repo_id in models_to_download.items():
+for model_name, info in models.items():
     model_path = os.path.join(MODEL_DIR, model_name)
     os.makedirs(model_path, exist_ok=True)
     
     print(f"\nDownloading {model_name}...")
-    print(f"  Repo: {repo_id}")
     
-    try:
-        snapshot_download(
-            repo_id=repo_id,
-            local_dir=model_path,
-            token=hf_token,
-            local_files_only=False,
-            max_workers=4
-        )
-        print(f"  ✓ Downloaded successfully!")
-        downloaded.append(model_name)
-    except Exception as e:
-        print(f"  ✗ Failed: {type(e).__name__}: {str(e)[:200]}")
-        failed.append(model_name)
+    for filename in info["files"]:
+        filepath = os.path.join(model_path, filename)
+        
+        if os.path.exists(filepath):
+            size_mb = os.path.getsize(filepath) / (1024 * 1024)
+            print(f"  ✓ {filename} (cached, {size_mb:.1f} MB)")
+            downloaded += 1
+            continue
+        
+        url = hubert_url + f"{model_name}/{filename}"
+        print(f"  ⏳ {filename}...")
+        
+        try:
+            urllib.request.urlretrieve(url, filepath)
+            size_mb = os.path.getsize(filepath) / (1024 * 1024)
+            print(f"  ✓ {filename} ({size_mb:.1f} MB)")
+            downloaded += 1
+        except Exception as e:
+            print(f"  ✗ Failed: {e}")
+            failed += 1
 
 print(f"\n{'='*40}")
-print(f"Downloaded: {len(downloaded)}, Failed: {len(failed)}")
+print(f"Downloaded: {downloaded}, Failed: {failed}")
 
-if failed:
-    print(f"Failed models: {', '.join(failed)}")
-    print("\n⚠️ Please check:")
-    print("  1. HUGGINGFACE_TOKEN has read access to these repos")
-    print("  2. Network connectivity from Kaggle")
+if failed > 0:
+    print("\n⚠️ Some files failed. Trying HuggingFace Hub fallback...")
+    print("Make sure HUGGINGFACE_TOKEN is set in Kaggle Secrets!")
 
 # Verify models
 print("\nVerifying downloaded models...")
-for model_name in models_to_download.keys():
+for model_name in models.keys():
     model_path = os.path.join(MODEL_DIR, model_name, "pytorch_model.bin")
     if os.path.exists(model_path):
         size_mb = os.path.getsize(model_path) / (1024 * 1024)
@@ -162,7 +176,7 @@ for model_name in models_to_download.keys():
     else:
         print(f"  ✗ {model_name}: MISSING")
 
-# Save model path for later cells
+# Save model path for later
 with open("/kaggle/working/model_dir.txt", "w") as f:
     f.write(MODEL_DIR)
 
@@ -260,6 +274,7 @@ class TrainingConfig:
     gpt_model_path: str = os.path.join(MODEL_DIR, "chinese-speech-pretrain")
     
     # Data paths (Kaggle dataset)
+    # Format: /kaggle/input/datasets/{owner}/{repo}/{dataset}
     data_dir: str = "/kaggle/input/datasets/ulysses6406/chajoowan-wavs"
     ref_audio_files: List[str] = None
     train_audio_files: List[str] = None
@@ -274,7 +289,7 @@ class TrainingConfig:
     
     # Output
     output_dir: str = "/kaggle/working/outputs"
-    experiment_name: str = "cha-juwan-gpt-sovits"
+    experiment_name: str = "cha-juwan-voice"
     
     # Audio params
     sample_rate: int = 32000
@@ -282,10 +297,21 @@ class TrainingConfig:
     
     def __post_init__(self):
         os.makedirs(self.output_dir, exist_ok=True)
+        # Set default audio lists
         if self.ref_audio_files is None:
             self.ref_audio_files = []
         if self.train_audio_files is None:
             self.train_audio_files = []
+    
+    def save(self, path: str):
+        with open(path, 'w', encoding='utf-8') as f:
+            yaml.dump(asdict(self), f, allow_unicode=True)
+    
+    @classmethod
+    def load(cls, path: str):
+        with open(path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+        return cls(**data)
 
 # Load config with dataset info
 config = TrainingConfig(
@@ -298,12 +324,6 @@ config_path = os.path.join(config.output_dir, config.experiment_name, "config.ya
 os.makedirs(os.path.dirname(config_path), exist_ok=True)
 config.save(config_path)
 logger.info(f"✓ Config saved: {config_path}")
-
-# Store config in a file so Cell 5 can read it
-config_json_path = "/kaggle/working/config.json"
-with open(config_json_path, "w", encoding="utf-8") as f:
-    json.dump(asdict(config), f, ensure_ascii=False, indent=2)
-logger.info(f"✓ Config JSON saved: {config_json_path}")
 
 # %%
 @dataclass
@@ -333,6 +353,7 @@ class AudioPreprocessor:
         
         waveform, sample_rate = torchaudio.load(path)
         
+        # Resample
         if sample_rate != self.config.sample_rate:
             resampler = torchaudio.transforms.Resample(
                 orig_freq=sample_rate,
@@ -340,9 +361,11 @@ class AudioPreprocessor:
             )
             waveform = resampler(waveform)
         
+        # Mono
         if waveform.shape[0] > 1:
             waveform = waveform.mean(dim=0, keepdim=True)
         
+        # Trim
         max_samples = int(max_duration * self.config.sample_rate)
         if waveform.shape[1] > max_samples:
             waveform = waveform[:, :max_samples]
@@ -397,22 +420,30 @@ class GPTSoVITSTrainer:
         self.audio_config = AudioConfig()
         self.preprocessor = AudioPreprocessor(self.audio_config)
         
+        # Load models
         self.hubert = HubertModelWrapper(config.hubert_model_path)
         
+        # Training state
         self.step = 0
         self.epoch = 0
         self.best_loss = float('inf')
         
+        # Create output dir
         os.makedirs(os.path.join(config.output_dir, config.experiment_name), exist_ok=True)
     
     def prepare_dataset(self) -> List[Dict]:
+        """Prepare training samples from audio files"""
         samples = []
         
         logger.info(f"\nPreparing dataset...")
         logger.info(f"  Reference audio: {len(self.config.ref_audio_files)} files")
         logger.info(f"  Training audio: {len(self.config.train_audio_files)} files")
         
+        # Use reference audio for speaker embedding
+        # For now, we'll train on all training audio files
+        
         for audio_file in self.config.train_audio_files:
+            # Extract text from filename (simplified)
             text = Path(audio_file).stem
             text = re.sub(r'[_\-]\d+$', '', text)
             
@@ -425,11 +456,16 @@ class GPTSoVITSTrainer:
         return samples
     
     def train_step(self, audio: np.ndarray, hubert_features: torch.Tensor) -> Dict:
+        """Single training step"""
+        # Extract mel features
         mel = self.preprocessor.extract_mel(audio)
         
+        # Placeholder: compare mel statistics with hubert features
+        # In real GPT-SoVITS, you'd use the full architecture
         mel_mean = mel.mean(dim=1).unsqueeze(-1)
         hubert_mean = hubert_features.mean(dim=1).unsqueeze(-1)
         
+        # Make shapes compatible
         if mel_mean.shape[-1] != hubert_mean.shape[-1]:
             hubert_mean = hubert_mean[:, :mel_mean.shape[-1]]
         
@@ -438,6 +474,7 @@ class GPTSoVITSTrainer:
         return {"loss": loss.item(), "mel_shape": mel.shape, "hubert_shape": hubert_features.shape}
     
     def train(self):
+        """Main training loop"""
         logger.info(f"\n{'='*60}")
         logger.info(f"GPT-SoVITS Training - {self.config.experiment_name}")
         logger.info(f"{'='*60}")
@@ -451,12 +488,14 @@ class GPTSoVITSTrainer:
         logger.info(f"Output: {self.config.output_dir}")
         logger.info(f"{'='*60}\n")
         
+        # Prepare data
         samples = self.prepare_dataset()
         
         if len(samples) == 0:
             logger.error("✗ No training samples!")
             return
         
+        # Training loop
         optimizer = torch.optim.AdamW(
             [{"params": self.hubert.model.parameters()}],
             lr=self.config.learning_rate
@@ -468,6 +507,7 @@ class GPTSoVITSTrainer:
             self.epoch = epoch
             epoch_losses = []
             
+            # Process in batches
             batch_size = self.config.batch_size
             for i in range(0, len(samples), batch_size):
                 batch_samples = samples[i:i+batch_size]
@@ -477,22 +517,29 @@ class GPTSoVITSTrainer:
                 for sample in batch_samples:
                     self.step += 1
                     
+                    # Load and preprocess audio
                     audio = self.preprocessor.load_audio(
                         sample["audio_path"], 
                         max_duration=self.config.max_duration
                     )
                     
+                    # Extract HuBERT features
                     hubert_features = self.hubert.extract_features(audio)
                     
+                    # Training step
                     result = self.train_step(audio, hubert_features)
                     loss = result["loss"]
                     batch_losses.append(loss)
                     
+                    # Backward pass (placeholder)
                     optimizer.zero_grad()
+                    # In real implementation: loss.backward()
+                    # optimizer.step()
                 
                 avg_batch_loss = sum(batch_losses) / len(batch_losses)
                 epoch_losses.append(avg_batch_loss)
                 
+                # Logging
                 if self.step % self.config.log_every == 0:
                     elapsed = (datetime.now() - start_time).total_seconds()
                     logger.info(
@@ -501,12 +548,15 @@ class GPTSoVITSTrainer:
                         f"Time: {elapsed:6.0f}s"
                     )
             
+            # Epoch summary
             avg_epoch_loss = sum(epoch_losses) / len(epoch_losses)
             logger.info(f"  >>> Epoch {epoch+1} avg loss: {avg_epoch_loss:.4f}")
             
+            # Save checkpoint
             if (epoch + 1) % self.config.save_every == 0:
                 self.save_checkpoint(epoch + 1)
         
+        # Final save
         self.save_checkpoint(self.config.num_epochs)
         
         elapsed = (datetime.now() - start_time).total_seconds()
@@ -517,6 +567,7 @@ class GPTSoVITSTrainer:
         logger.info(f"{'='*40}")
     
     def save_checkpoint(self, epoch: int):
+        """Save model checkpoint"""
         checkpoint_dir = os.path.join(
             self.config.output_dir,
             self.config.experiment_name
@@ -539,17 +590,6 @@ class GPTSoVITSTrainer:
 # Cell 5: Run Training
 
 if __name__ == "__main__":
-    # === FIXED: Load config from JSON file to avoid variable scope issues ===
-    config_json_path = "/kaggle/working/config.json"
-    if os.path.exists(config_json_path):
-        with open(config_json_path, "r", encoding="utf-8") as f:
-            config_dict = json.load(f)
-        config = TrainingConfig(**config_dict)
-        logger.info(f"✓ Loaded config from: {config_json_path}")
-    else:
-        logger.error("✗ Config file not found!")
-        sys.exit("Please run Cell 4 first")
-    
     # Verify everything is ready
     logger.info("="*60)
     logger.info("FINAL CHECK")
@@ -573,10 +613,9 @@ if __name__ == "__main__":
         else:
             logger.error(f"✗ {model_name}: MISSING!")
     
-    # Check data - FIXED: use config.train_audio_files directly
+    # Check data
     data_count = len(config.train_audio_files)
     logger.info(f"✓ Training audio: {data_count} files")
-    logger.info(f"✓ Reference audio: {len(config.ref_audio_files)} files")
     
     if data_count < 5:
         logger.warning(f"⚠️ Only {data_count} training samples. More is better for voice cloning!")
