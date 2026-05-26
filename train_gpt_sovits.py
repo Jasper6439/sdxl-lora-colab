@@ -107,20 +107,24 @@ print(f"  CUDA: {torch.cuda.is_available()}")
 # ============================================================
 print("\n📥 STEP 4/6: Download pretrained models")
 
-# Method: Use huggingface-cli (works better on Kaggle)
-# If you have HF_TOKEN, uncomment below:
-# os.environ['HF_TOKEN'] = 'hf_xxx...'
+# Read HF_TOKEN from Kaggle Secrets (secure) or env variable
+hf_token = os.environ.get('HF_TOKEN', '')
+if not hf_token:
+    try:
+        from kaggle_secrets import UserSecretsClient
+        user_secrets = UserSecretsClient()
+        hf_token = user_secrets.get_secret("HF_TOKEN")
+        os.environ['HF_TOKEN'] = hf_token
+        print("  ✅ Loaded HF_TOKEN from Kaggle Secrets")
+    except Exception as e:
+        print(f"  ⚠️  No HF_TOKEN found (Kaggle Secrets or env var)")
+        print(f"     Add HF_TOKEN in Kaggle: Settings → Secrets → Add")
+else:
+    print("  ✅ Loaded HF_TOKEN from environment")
 
-print("  Downloading via huggingface-cli (bypasses 401 error)...")
+print("  Downloading via huggingface-cli...")
 subprocess.run([
     'huggingface-cli', 'download', 'RVC-Boss/GPT-SoVITS',
-    'pretrained_models/gpt.ckpt',
-    '--local-dir', '/kaggle/working/GPT-SoVITS'
-], check=True, capture_output=False)
-
-subprocess.run([
-    'huggingface-cli', 'download', 'RVC-Boss/GPT-SoVITS',
-    'pretrained_models/sovits.pth',
     '--local-dir', '/kaggle/working/GPT-SoVITS'
 ], check=True, capture_output=False)
 
