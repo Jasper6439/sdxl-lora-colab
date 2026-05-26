@@ -115,16 +115,25 @@ if not hf_token:
         user_secrets = UserSecretsClient()
         hf_token = user_secrets.get_secret("HF_TOKEN")
         os.environ['HF_TOKEN'] = hf_token
+        os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
         print("  ✅ Loaded HF_TOKEN from Kaggle Secrets")
     except Exception as e:
         print(f"  ⚠️  No HF_TOKEN found (Kaggle Secrets or env var)")
         print(f"     Add HF_TOKEN in Kaggle: Settings → Secrets → Add")
 else:
+    os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
     print("  ✅ Loaded HF_TOKEN from environment")
 
-print("  Downloading via huggingface-cli...")
+# Install huggingface_hub with CLI support
+print("  Installing huggingface_hub[cli]...")
+subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-input',
+    'huggingface_hub[cli]'], check=True, capture_output=False)
+
+# Use Python module to avoid PATH issues
+print("  Downloading pretrained models (this may take 5-10 min)...")
 subprocess.run([
-    'huggingface-cli', 'download', 'RVC-Boss/GPT-SoVITS',
+    sys.executable, '-m', 'huggingface_hub.commands.huggingface_cli',
+    'download', 'RVC-Boss/GPT-SoVITS',
     '--local-dir', '/kaggle/working/GPT-SoVITS'
 ], check=True, capture_output=False)
 
