@@ -108,7 +108,7 @@ print(f"  CUDA: {torch.cuda.is_available()}")
 print("\n📥 STEP 4/6: Download pretrained models")
 
 # Read HF_TOKEN from Kaggle Secrets (secure) or env variable
-hf_token = os.environ.get('HF_TOKEN', '')
+hf_token = os.environ.get('HF_TOKEN', '') or os.environ.get('HUGGING_FACE_HUB_TOKEN', '')
 if not hf_token:
     try:
         from kaggle_secrets import UserSecretsClient
@@ -124,22 +124,29 @@ else:
     os.environ['HUGGING_FACE_HUB_TOKEN'] = hf_token
     print("  ✅ Loaded HF_TOKEN from environment")
 
-# Install huggingface_hub with CLI support
-print("  Installing huggingface_hub[cli]...")
-subprocess.run([sys.executable, '-m', 'pip', 'install', '--no-input',
-    'huggingface_hub[cli]'], check=True, capture_output=False)
+# Use Python API directly (more reliable than CLI)
+print("  Downloading via huggingface_hub Python API...")
 
-# Use Python module to avoid PATH issues
-print("  Downloading pretrained models (this may take 5-10 min)...")
-subprocess.run([
-    sys.executable, '-m', 'huggingface_hub.commands.huggingface_cli',
-    'download', 'RVC-Boss/GPT-SoVITS',
-    '--local-dir', '/kaggle/working/GPT-SoVITS'
-], check=True, capture_output=False)
+from huggingface_hub import hf_hub_download, HfApi
 
-gpt_path = '/kaggle/working/GPT-SoVITS/pretrained_models/gpt.ckpt'
-sovits_path = '/kaggle/working/GPT-SoVITS/pretrained_models/sovits.pth'
+# Download GPT model
+gpt_path = hf_hub_download(
+    repo_id='RVC-Boss/GPT-SoVITS',
+    filename='pretrained_models/gpt.ckpt',
+    local_dir='/kaggle/working/GPT-SoVITS',
+    token=hf_token if hf_token else None,
+    local_dir_use_symlinks=False
+)
 print(f"  ✅ GPT model: {gpt_path}")
+
+# Download SoVITS model
+sovits_path = hf_hub_download(
+    repo_id='RVC-Boss/GPT-SoVITS',
+    filename='pretrained_models/sovits.pth',
+    local_dir='/kaggle/working/GPT-SoVITS',
+    token=hf_token if hf_token else None,
+    local_dir_use_symlinks=False
+)
 print(f"  ✅ SoVITS model: {sovits_path}")
 
 # ============================================================
